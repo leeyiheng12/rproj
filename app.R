@@ -543,6 +543,7 @@ failed_vs_success_matches <- function() {
 
 
 
+
 # SHINY
 
 
@@ -626,14 +627,18 @@ secondTab <- tabPanel("Tastes and Preferences - II",
                       
                       hr(),
                       
-                      headerPanel("What others look for vs what I look for in the opposite sex"),
-                      numericInput("attJoey", label = "Attractiveness", value = 0, min = 0, max = 100, step = 5),
-                      numericInput("sinJoey", label = "Sincerity", value = 0, min = 0, max = 100, step = 5),
-                      numericInput("intJoey", label = "Intelligence", value = 0, min = 0, max = 100, step = 5),
-                      numericInput("funJoey", label = "Fun", value = 0, min = 0, max = 100, step = 5),
-                      numericInput("ambJoey", label = "Ambition", value = 0, min = 0, max = 100, step = 5),
-                      numericInput("shaJoey", label = "Shared interests", value = 0, min = 0, max = 100, step = 5),
-                      plotOutput("vsPlotJoey")
+                      titlePanel("What others look for vs what I look for in the opposite sex"),
+                      fluidRow(splitLayout(cellWidths = c("50%", "50%"),
+                                           absolutePanel(
+                                             numericInput("attJoey", label = "Attractiveness", value = 0, min = 0, max = 100, step = 5),
+                                             numericInput("sinJoey", label = "Sincerity", value = 0, min = 0, max = 100, step = 5),
+                                             numericInput("intJoey", label = "Intelligence", value = 0, min = 0, max = 100, step = 5),
+                                             numericInput("funJoey", label = "Fun", value = 0, min = 0, max = 100, step = 5),
+                                             numericInput("ambJoey", label = "Ambition", value = 0, min = 0, max = 100, step = 5),
+                                             numericInput("shaJoey", label = "Shared interests", value = 0, min = 0, max = 100, step = 5),  
+                                           ),
+                                           plotOutput("vsPlotJoey"))
+                      )
 )
 
 # ======================== JOEY ========================
@@ -736,7 +741,9 @@ ui <- fluidPage(
                 secondTab,
                 thirdTab,
                 fourthTab,
-    )
+                fifthTab
+    ),
+    width = 12
     
   ),
   
@@ -820,7 +827,6 @@ server <- function(input, output) {
   output$dateFreqComp <- renderPlot(get_chars_pie_chart(freq_of_dates_combos, input$my_date_dropdown, input$partner_date_dropdown))
   
 }
-
 
 shinyApp(ui = ui, server = server)
 
