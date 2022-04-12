@@ -14,6 +14,12 @@ library(shinycssloaders)
 library(sf)
 library(mapview)
 
+
+safe_divide <- function(a, b) {
+  return (ifelse(b == 0, 0, a/b))
+}
+
+
 # takes in a number and number of decimal places to round to, returns a percentage string
 # e.g. to_pctg(0.75229, 2) returns "75.23%"
 to_pctg <- function(x, dp) {
@@ -676,7 +682,9 @@ look_for_in_opp_sex_day_after_event_w_age <- add_age(look_for_in_opp_sex_day_aft
 look_for_in_opp_sex_weeks_after_event_w_age <- add_age(look_for_in_opp_sex_weeks_after_event)
 
 
-appOverviewTab <- tabPanel("App Overview",
+
+
+appOverviewTab <- tabPanel("Users Overview (Free)",
                            titlePanel(paste0("Number of users: ", num_users)),
                            hr(),
                            fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("gender_plot"), plotOutput("age_plot"))),
@@ -688,7 +696,7 @@ appOverviewTab <- tabPanel("App Overview",
                            fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("go_out_freq_plot"), plotOutput("go_on_date_plot")))
 )
 
-firstTab <- tabPanel("Tastes and Preferences",
+firstTab <- tabPanel("Tastes and Preferences (Free)",
                      titlePanel("What do ___ look for in the oppsite sex..."),
                      
                      fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("lookForA"), plotOutput("lookForB"))),
@@ -703,7 +711,7 @@ firstTab <- tabPanel("Tastes and Preferences",
 
 
 # ======================== JOEY ========================
-secondTab <- tabPanel("Tastes and Preferences - II",
+secondTab <- tabPanel("Tastes and Preferences - II (Paid)",
                       titlePanel("Change in importance of attributes"),
                       fluidRow(splitLayout(cellWidths = c("50%", "50%"),
                                            div(
@@ -731,7 +739,7 @@ secondTab <- tabPanel("Tastes and Preferences - II",
 
 # ======================== JOEY ========================
 
-thirdTab <- tabPanel("Impressions on Dates",
+thirdTab <- tabPanel("Impressions on Dates (Paid)",
                      titlePanel("On failed vs successful matches, what did people think about the other person's characteristics?"),
                      plotOutput("datesImpressionsPlot")
 )
@@ -756,7 +764,7 @@ fourthTab <- tabPanel("How matching are our attributes?",
 )
 
 fifthTab <-
-  tabPanel("How matching are our characteristics?",
+  tabPanel("How matching are our characteristics? (Paid)",
            fluidRow(splitLayout(cellWidths = c("50%", "50%"),
                                 absolutePanel(
                                   selectInput("my_field_study_dropdown", label = h3("My field of study"), 
@@ -943,3 +951,5 @@ server <- function(input, output) {
 }
 
 shinyApp(ui = ui, server = server)
+
+
