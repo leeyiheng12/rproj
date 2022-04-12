@@ -4,8 +4,15 @@ library(tidyr)
 library(ggplot2)
 library(tidyverse)
 library(fmsb)
+library(scales)
 
 library(shiny)
+library(ggmap)
+library(tidygeocoder)
+library(jsonlite)
+library(shinycssloaders)
+library(sf)
+library(mapview)
 
 # takes in a number and number of decimal places to round to, returns a percentage string
 # e.g. to_pctg(0.75229, 2) returns "75.23%"
@@ -542,6 +549,76 @@ failed_vs_success_matches <- function() {
 }
 
 
+# APP OVERVIEW
+
+
+num_users <- nrow(participants_data)
+
+gender_stats <- (participants_data %>% filter(!is.na(is_male))
+                 %>% group_by(is_male) %>% summarise("Number of Users" = n()) 
+                 %>% mutate("Gender" = ifelse(is_male, "Male", "Female")) 
+                 %>% select("Gender", "Number of Users"))
+
+age_stats <- (participants_data 
+              %>% filter(!is.na(age)) 
+              %>% mutate(Age = ifelse(between(age, 18, 25), "18-25", ifelse(between(age, 26, 35), "26-35", "36-55")))
+              %>% group_by(Age) %>% summarise("Number of Users" = n())
+)
+
+field_of_study_stats <- (participants_data %>% filter(!is.na(field_of_study_category))
+                         %>% group_by(field_of_study_category) %>% summarise("Number of Users" = n())
+                         %>% rename("Field of Study" = field_of_study_category)
+)
+
+race_stats <- (participants_data %>% filter(!is.na(race))
+               %>% group_by(race) %>% summarise("Number of Users" = n())
+               %>% rename("Race" = race)
+)
+
+goal_of_participating_stats <- (participants_data %>% filter(!is.na(goal_of_participating))
+                                %>% group_by(goal_of_participating) %>% summarise("Number of Users" = n())
+                                %>% rename("Goal of Participating" = goal_of_participating)
+)
+go_out_freq_stats <- (participants_data %>% filter(!is.na(freq_of_going_out))
+                      %>% group_by(freq_of_going_out) %>% summarise("Number of Users" = n())
+                      %>% rename("Frequency of going out" = freq_of_going_out)
+)
+
+go_on_date_freq_stats <- (participants_data %>% filter(!is.na(freq_of_going_on_dates))
+                          %>% group_by(freq_of_going_on_dates) %>% summarise("Number of Users" = n())
+                          %>% rename("Frequency of going on dates" = freq_of_going_on_dates)
+)
+
+intended_career_stats <- (participants_data %>% filter(!is.na(intended_career_category))
+                          %>% group_by(intended_career_category) %>% summarise("Number of Users" = n())
+                          %>% rename("Intended Career Category" = intended_career_category)
+)
+
+
+
+
+get_basic_stats_pie_chart <- function(df, title) {
+  
+  first_col <- names(df)[1]
+  n <- sum(intended_career_stats$`Number of Users`)
+  
+  df <- df %>% mutate(labels_for_legend = paste0(!!as.symbol(first_col), " (", percent(!!as.symbol("Number of Users") / n), ")")) %>% arrange(-`Number of Users`)
+  
+  pctgs <- paste0(round(intended_career_stats$`Number of Users` * 100 / n, 1), "%")
+  
+  rand_palette_num <- sample(1:18, 1)
+  
+  pie <- (ggplot(df, aes(x = "", y = `Number of Users`, fill = reorder(labels_for_legend, -`Number of Users`))) 
+          + geom_bar(width = 1, stat = "identity") 
+          + coord_polar("y", start = 0)
+          + theme_void()
+          + labs(fill = NULL, title = paste0(first_col, ", n = ", n))
+          + theme(legend.text = element_text(size = 14)))
+  
+  return (pie)
+}
+
+
 
 
 # SHINY
@@ -599,6 +676,17 @@ look_for_in_opp_sex_day_after_event_w_age <- add_age(look_for_in_opp_sex_day_aft
 look_for_in_opp_sex_weeks_after_event_w_age <- add_age(look_for_in_opp_sex_weeks_after_event)
 
 
+appOverviewTab <- tabPanel("App Overview",
+                           titlePanel(paste0("Number of users: ", num_users)),
+                           hr(),
+                           fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("gender_plot"), plotOutput("age_plot"))),
+                           hr(),
+                           fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("race_plot"), plotOutput("goal_of_participating_plot"))),
+                           hr(),
+                           fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("field_of_study_plot"), plotOutput("intended_career_plot"))),
+                           hr(),
+                           fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("go_out_freq_plot"), plotOutput("go_on_date_plot")))
+)
 
 firstTab <- tabPanel("Tastes and Preferences",
                      titlePanel("What do ___ look for in the oppsite sex..."),
@@ -618,9 +706,9 @@ firstTab <- tabPanel("Tastes and Preferences",
 secondTab <- tabPanel("Tastes and Preferences - II",
                       titlePanel("Change in importance of attributes"),
                       fluidRow(splitLayout(cellWidths = c("50%", "50%"),
-                                           absolutePanel(
+                                           div(
                                              radioButtons("gender", label = "Gender", choices = c("Male" = "TRUE", "Female" = "FALSE")),
-                                             radioButtons("age", label = "Age", choices = c("18-25","26-35","36-55")),
+                                             radioButtons("age", label = "Age", choices = c("18-25","26-35","36-55"))
                                            ),
                                            plotOutput("imptPlot"))
                       ),
@@ -730,13 +818,13 @@ fifthTab <-
 
 
 
-
 ui <- fluidPage(
   
   titlePanel("Title"),
   
   mainPanel(
     tabsetPanel(type = "tabs",
+                appOverviewTab,
                 firstTab,
                 secondTab,
                 thirdTab,
@@ -753,6 +841,17 @@ ui <- fluidPage(
 
 
 server <- function(input, output) {
+  
+  # Overview Tab
+  
+  output$gender_plot <- renderPlot({get_basic_stats_pie_chart(gender_stats)})
+  output$age_plot <- renderPlot({get_basic_stats_pie_chart(age_stats)})
+  output$field_of_study_plot <- renderPlot({get_basic_stats_pie_chart(field_of_study_stats)})
+  output$race_plot <- renderPlot({get_basic_stats_pie_chart(race_stats)})
+  output$goal_of_participating_plot <- renderPlot({get_basic_stats_pie_chart(goal_of_participating_stats)})
+  output$go_out_freq_plot <- renderPlot({get_basic_stats_pie_chart(go_out_freq_stats)})
+  output$go_on_date_plot <- renderPlot({get_basic_stats_pie_chart(go_on_date_freq_stats)})
+  output$intended_career_plot <- renderPlot({get_basic_stats_pie_chart(intended_career_stats)})
   
   # Tab 1
   
@@ -778,13 +877,13 @@ server <- function(input, output) {
       }
     }
     
-    attrs <- c("Attractiveness","Sincerity","Intelligence","Fun","Ambition","Shared interests")
+    attrs <- c("Attractiveness", "Sincerity", "Intelligence", "Fun", "Ambition", "Shared interests")
     
     criteria <- rep(attrs, 3)
     stage <- c(rep("At signup", 6), rep("Day after", 6), rep("Weeks after", 6))
-    tb <- data.frame(stage, criteria, value) %>% within(stage <- factor(stage, levels=c("At signup", "Day after", "Weeks after")))
+    tb <- data.frame(stage, criteria, value) %>% within(stage <- factor(stage, levels = c("At signup", "Day after", "Weeks after")))
     
-    ggplot(tb, aes(fill = criteria, y = value, x = stage)) + geom_bar(position="stack", stat="identity", color="black") + scale_fill_brewer()
+    ggplot(tb, aes(fill = criteria, y = value, x = stage)) + geom_bar(position = "stack", stat = "identity", color = "black") + scale_fill_brewer()
   })
   
   
@@ -808,6 +907,7 @@ server <- function(input, output) {
     }) 
   
   # Tab 3
+  
   output$datesImpressionsPlot <- renderPlot({failed_vs_success_matches()})
   
   # Tab 4
@@ -820,14 +920,26 @@ server <- function(input, output) {
   
   # Tab 5
   
-  output$fieldOfStudyComp <- renderPlot(get_chars_pie_chart(field_of_study_combos, input$my_field_study_dropdown, input$partner_field_study_dropdown))
-  output$raceComp <- renderPlot(get_chars_pie_chart(race_combos, input$my_race_dropdown, input$partner_race_dropdown))
-  output$participatingReasonComp <- renderPlot(get_chars_pie_chart(goal_of_participating_combos, input$my_participating_dropdown, input$partner_participating_dropdown))
-  output$goingOutFreqComp <- renderPlot(get_chars_pie_chart(freq_of_going_out_combos, input$my_go_out_dropdown, input$partner_go_out_dropdown))
-  output$dateFreqComp <- renderPlot(get_chars_pie_chart(freq_of_dates_combos, input$my_date_dropdown, input$partner_date_dropdown))
+  output$fieldOfStudyComp <- renderPlot(
+    get_chars_pie_chart(field_of_study_combos, input$my_field_study_dropdown, input$partner_field_study_dropdown)
+  )
+  
+  output$raceComp <- renderPlot(
+    get_chars_pie_chart(race_combos, input$my_race_dropdown, input$partner_race_dropdown)
+  )
+  
+  output$participatingReasonComp <- renderPlot(
+    get_chars_pie_chart(goal_of_participating_combos, input$my_participating_dropdown, input$partner_participating_dropdown)
+  )
+  
+  output$goingOutFreqComp <- renderPlot(
+    get_chars_pie_chart(freq_of_going_out_combos, input$my_go_out_dropdown, input$partner_go_out_dropdown)
+  )
+  
+  output$dateFreqComp <- renderPlot(
+    get_chars_pie_chart(freq_of_dates_combos, input$my_date_dropdown, input$partner_date_dropdown)
+  )
   
 }
 
 shinyApp(ui = ui, server = server)
-
-
