@@ -1,24 +1,17 @@
-
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(tidyverse)
 library(fmsb)
 library(scales)
-
+library(stringr)
 library(shiny)
 library(ggmap)
-library(tidygeocoder)
-library(jsonlite)
-library(shinycssloaders)
-library(sf)
-library(mapview)
 
 
 safe_divide <- function(a, b) {
   return (ifelse(b == 0, 0, a/b))
 }
-
 
 # takes in a number and number of decimal places to round to, returns a percentage string
 # e.g. to_pctg(0.75229, 2) returns "75.23%"
@@ -130,6 +123,8 @@ matches_general <- read.csv(paste0("matches_general", ".csv"))
 
 
 
+
+
 # function that removes rows where all columns are NA
 remove_six_attrs_all_na <- function(df) {
   return (df %>% filter(!(is.na(attractiveness) & is.na(sincerity) & is.na(intelligence) & is.na(fun) & is.na(ambition) & is.na(shared_interests))))
@@ -179,7 +174,7 @@ cleanup_get_summary <- function(df) {
 
 get_plot_from_six_attrs_summary <- function(df, title) {
   return (df %>% ggplot(aes(x = Attribute, y = Score)) 
-          + geom_bar(stat = "identity") 
+          + geom_bar(stat = "identity", color = "black") 
           + ylim(0, 40)
           + labs(title = title, x = "Attribute", y = "Average rating (sums to 100)") 
           + facet_wrap(~gender))
@@ -189,7 +184,9 @@ get_plot_from_six_attrs_summary <- function(df, title) {
 
 
 
+
 # 1) Chart to show proportion of people interested based on interest level in some activity
+
 
 # options
 # =======
@@ -260,25 +257,28 @@ get_attributes_comparison <- function(attr, other_attr, is_male) {
   
   # facet_var = as.formula(paste0("~", aggr_attr_col_name))
   
-  graph_title <- paste0("Proportion of people of the other gender interested in you, 
-                        \n based on your level of interest in ", attr, " and his/her level of interest in " , other_attr, 
-                        "\n\nYour level of interest in ", attr)
+  graph_title <- paste0("Your level of interest in ", attr)
   x_axis_label <- paste0("Their level of interest in ", other_attr)
-  y_axis_label <- "Proportion of interest"
+  y_axis_label <- "Probability of a match"
   
   attributes_comparison_graph <- (attributes_comparison 
                                   %>% mutate(grouping = factor(!!as.symbol(aggr_attr_col_name), levels = ordering))  # create a new column to order Low Mid High
                                   %>% ggplot(aes(x = reorder(!!as.symbol(aggr_other_attr_col_name), success_rate), # reorder within each facet
-                                                 y = success_rate)) 
-                                  + geom_bar(stat = "identity", fill = rainbow(nrow(attributes_comparison)))
+                                                 y = success_rate,
+                                                 fill = success_rate)) 
+                                  + geom_bar(stat = "identity", color = "black")
                                   + facet_wrap(.~grouping)  # order the facets based on Low, Mid, High
                                   + ggtitle(graph_title)
                                   + labs(x = x_axis_label, y = y_axis_label)
-                                  + theme(plot.title = element_text(hjust = 0.5))
+                                  + theme(plot.title = element_text(hjust = 0.5)) 
+                                  + scale_fill_gradient(low = "#FFDAF4", high = "#FE58CD")
+                                  
   )
   
   return (attributes_comparison_graph)
 }
+
+
 
 
 
@@ -343,6 +343,10 @@ other_sex_weeks_after_event_look_for <- get_plot_from_six_attrs_summary(opp_sex_
 
 
 
+
+
+
+
 spider_chart_look <- function(df, title) {
   
   df <- df %>% spread(Attribute, Score) %>% remove_rownames %>% column_to_rownames(var="gender")
@@ -379,8 +383,10 @@ spider_chart_look(opp_sex_look_for_in_date_before_event_summary, "What ___ think
 
 
 
-# 3) What kind of matches will they get based on their own rating?
 
+
+
+# 3) What kind of matches will they get based on their own rating?
 
 
 match.probability <- function(is_female, as, sy, ie, fn, an, ss) {
@@ -418,6 +424,9 @@ match.probability <- function(is_female, as, sy, ie, fn, an, ss) {
 }
 
 match.probability(is_female = FALSE, 10, 20, 15, 20, 15, 20)
+
+
+
 
 
 
@@ -511,7 +520,7 @@ get_chars_pie_chart <- function(df, person_char, partner_char) {
   }
   
   pie <- df_intermediate %>% ggplot(aes(x = "", y = Values, fill = !!as.symbol("Match Result"))) +
-    geom_bar(stat="identity", width = 1) +
+    geom_bar(stat="identity", width = 1, color = "black") +
     geom_text(aes(label = pctgs), position = position_stack(vjust = 0.5), col = "black") +
     coord_polar("y", start = 0) +
     labs(title = paste0("n = ", tot_num)) +
@@ -524,8 +533,10 @@ get_chars_pie_chart <- function(df, person_char, partner_char) {
 # get_chars_pie_chart(field_of_study_combos, "Business/Econ/Finance", "Business/Econ/Finance")
 
 
-# 5) For successful dates vs non-successful dates, what did people think about the other person's characteristics?
 
+
+
+# 5) For successful dates vs non-successful dates, what did people think about the other person's characteristics?
 
 
 failed_vs_success_matches <- function() {
@@ -550,85 +561,14 @@ failed_vs_success_matches <- function() {
               %>% gather(Attribute, Score, -match)
   )
   
-  return (results %>% ggplot(aes(x = Attribute, y = Score)) + geom_bar(stat = "identity") + facet_wrap(~match))
+  return (results %>% ggplot(aes(x = Attribute, y = Score, fill = Score)) + geom_bar(stat = "identity", color = "black") + scale_fill_gradient(low = "#FFDAF4", high = "#FE58CD") + facet_wrap(~match))
   
-}
-
-
-# APP OVERVIEW
-
-
-num_users <- nrow(participants_data)
-
-gender_stats <- (participants_data %>% filter(!is.na(is_male))
-                 %>% group_by(is_male) %>% summarise("Number of Users" = n()) 
-                 %>% mutate("Gender" = ifelse(is_male, "Male", "Female")) 
-                 %>% select("Gender", "Number of Users"))
-
-age_stats <- (participants_data 
-              %>% filter(!is.na(age)) 
-              %>% mutate(Age = ifelse(between(age, 18, 25), "18-25", ifelse(between(age, 26, 35), "26-35", "36-55")))
-              %>% group_by(Age) %>% summarise("Number of Users" = n())
-)
-
-field_of_study_stats <- (participants_data %>% filter(!is.na(field_of_study_category))
-                         %>% group_by(field_of_study_category) %>% summarise("Number of Users" = n())
-                         %>% rename("Field of Study" = field_of_study_category)
-)
-
-race_stats <- (participants_data %>% filter(!is.na(race))
-               %>% group_by(race) %>% summarise("Number of Users" = n())
-               %>% rename("Race" = race)
-)
-
-goal_of_participating_stats <- (participants_data %>% filter(!is.na(goal_of_participating))
-                                %>% group_by(goal_of_participating) %>% summarise("Number of Users" = n())
-                                %>% rename("Goal of Participating" = goal_of_participating)
-)
-go_out_freq_stats <- (participants_data %>% filter(!is.na(freq_of_going_out))
-                      %>% group_by(freq_of_going_out) %>% summarise("Number of Users" = n())
-                      %>% rename("Frequency of going out" = freq_of_going_out)
-)
-
-go_on_date_freq_stats <- (participants_data %>% filter(!is.na(freq_of_going_on_dates))
-                          %>% group_by(freq_of_going_on_dates) %>% summarise("Number of Users" = n())
-                          %>% rename("Frequency of going on dates" = freq_of_going_on_dates)
-)
-
-intended_career_stats <- (participants_data %>% filter(!is.na(intended_career_category))
-                          %>% group_by(intended_career_category) %>% summarise("Number of Users" = n())
-                          %>% rename("Intended Career Category" = intended_career_category)
-)
-
-
-
-
-get_basic_stats_pie_chart <- function(df, title) {
-  
-  first_col <- names(df)[1]
-  n <- sum(intended_career_stats$`Number of Users`)
-  
-  df <- df %>% mutate(labels_for_legend = paste0(!!as.symbol(first_col), " (", percent(!!as.symbol("Number of Users") / n), ")")) %>% arrange(-`Number of Users`)
-  
-  pctgs <- paste0(round(intended_career_stats$`Number of Users` * 100 / n, 1), "%")
-  
-  rand_palette_num <- sample(1:18, 1)
-  
-  pie <- (ggplot(df, aes(x = "", y = `Number of Users`, fill = reorder(labels_for_legend, -`Number of Users`))) 
-          + geom_bar(width = 1, stat = "identity") 
-          + coord_polar("y", start = 0)
-          + theme_void()
-          + labs(fill = NULL, title = paste0(first_col, ", n = ", n))
-          + theme(legend.text = element_text(size = 14)))
-  
-  return (pie)
 }
 
 
 
 
 # SHINY
-
 
 # some variables to use
 options_of_characteristics = c(
@@ -683,177 +623,328 @@ look_for_in_opp_sex_weeks_after_event_w_age <- add_age(look_for_in_opp_sex_weeks
 
 
 
+# =================================
+
+# fourth tab
+
+match_prob_to_heatmap <- function(df, title) {
+  
+  for (i in 1:nrow(df)) {
+    df[i, 1] <- str_wrap(df[i, 1], width = 10)
+  }
+  
+  return (ggplot(df, aes(!!as.symbol(colnames(df)[1]), !!as.symbol(colnames(df)[2]))) 
+          + geom_tile(aes(fill = Probability_of_Match), color = "black")
+          + xlab("You")
+          + ylab("Your partner")
+          + scale_fill_gradient(name = "Probability of matching", low = "#FFDAF4", high = "#FE58CD")
+          + labs(title = title)
+          + theme(text = element_text(size = 20))
+  )
+  
+}
+
+
+
+
+
+
+# APP OVERVIEW
+
+num_users <- nrow(participants_data)
+
+gender_stats <- (participants_data %>% filter(!is.na(is_male))
+                 %>% group_by(is_male) %>% summarise("Number of Users" = n()) 
+                 %>% mutate("Gender" = ifelse(is_male, "Male", "Female")) 
+                 %>% select("Gender", "Number of Users"))
+
+
+field_of_study_stats <- (participants_data %>% filter(!is.na(field_of_study_category))
+                         %>% group_by(field_of_study_category) %>% summarise("Number of Users" = n())
+                         %>% rename("Field of Study" = field_of_study_category)
+)
+
+race_stats <- (participants_data %>% filter(!is.na(race))
+               %>% group_by(race) %>% summarise("Number of Users" = n())
+               %>% rename("Race" = race)
+)
+
+goal_of_participating_stats <- (participants_data %>% filter(!is.na(goal_of_participating))
+                                %>% group_by(goal_of_participating) %>% summarise("Number of Users" = n())
+                                %>% rename("Goal of Participating" = goal_of_participating)
+)
+go_out_freq_stats <- (participants_data %>% filter(!is.na(freq_of_going_out))
+                      %>% group_by(freq_of_going_out) %>% summarise("Number of Users" = n())
+                      %>% rename("Frequency of going out" = freq_of_going_out)
+)
+
+go_on_date_freq_stats <- (participants_data %>% filter(!is.na(freq_of_going_on_dates))
+                          %>% group_by(freq_of_going_on_dates) %>% summarise("Number of Users" = n())
+                          %>% rename("Frequency of going on dates" = freq_of_going_on_dates)
+)
+
+intended_career_stats <- (participants_data %>% filter(!is.na(intended_career_category))
+                          %>% group_by(intended_career_category) %>% summarise("Number of Users" = n())
+                          %>% rename("Intended Career Category" = intended_career_category)
+)
+
+
+
+
+get_basic_stats_pie_chart <- function(df) {
+  
+  first_col <- names(df)[1]
+  n <- sum(intended_career_stats$`Number of Users`)
+  
+  df <- df %>% mutate(labels_for_legend = paste0(!!as.symbol(first_col), " (", percent(!!as.symbol("Number of Users") / n), ")")) %>% arrange(-`Number of Users`)
+  
+  pctgs <- paste0(round(intended_career_stats$`Number of Users` * 100 / n, 1), "%")
+  
+  pie <- (ggplot(df, aes(x = "", y = `Number of Users`, fill = reorder(labels_for_legend, -`Number of Users`))) 
+          + geom_bar(width = 1, stat = "identity", color = "black") 
+          + coord_polar("y", start = 0)
+          + labs(fill = NULL, title = paste0(first_col, ", n = ", n))
+          + theme(legend.text = element_text(size = 14), panel.background = element_rect(fill = "#FFFFFF"))
+  )
+  
+  return (pie)
+}
+
+
+
+
+
+# UI
 
 appOverviewTab <- tabPanel("Users Overview (Free)",
-                           titlePanel(paste0("Number of users: ", num_users)),
-                           hr(),
-                           fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("gender_plot"), plotOutput("age_plot"))),
-                           hr(),
-                           fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("race_plot"), plotOutput("goal_of_participating_plot"))),
-                           hr(),
-                           fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("field_of_study_plot"), plotOutput("intended_career_plot"))),
-                           hr(),
-                           fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("go_out_freq_plot"), plotOutput("go_on_date_plot")))
+                           titlePanel(h1(paste0("Number of users: ", num_users), align = "center")),
+                           
+                           br(), br(), hr(), br(), br(),
+                           
+                           fluidRow(align = "center",
+                                    column(6, align = "center", plotOutput("gender_plot")), 
+                                    column(6, align = "center", plotOutput("age_plot"))
+                           ),
+                           
+                           br(), br(), hr(), br(), br(),
+                           
+                           fluidRow(align = "center",
+                                    column(6, align = "center", plotOutput("race_plot")), 
+                                    column(6, align = "center", plotOutput("goal_of_participating_plot"))
+                           ),
+                           
+                           br(), br(), hr(), br(), br(),
+                           
+                           fluidRow(align = "center",
+                                    column(6, align = "center", plotOutput("field_of_study_plot")), 
+                                    column(6, align = "center", plotOutput("intended_career_plot"))
+                           ),
+                           
+                           br(), br(), hr(), br(), br(),
+                           
+                           fluidRow(align = "center",
+                                    column(6, align = "center", plotOutput("go_out_freq_plot")), 
+                                    column(6, align = "center", plotOutput("go_on_date_plot"))
+                           ),
+                           
+                           br(), br(), br()
+                           
 )
 
 firstTab <- tabPanel("Tastes and Preferences (Free)",
-                     titlePanel("What do ___ look for in the oppsite sex..."),
+                     titlePanel(h1("What do males and females look for in the opposite sex?", align = "center")),
+                     titlePanel(h3("The attributes that people look for in a date often change over time, especially after a few dates. Here's a look at some of the common changes.", align = "center")),
                      
-                     fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("lookForA"), plotOutput("lookForB"))),
-                     fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("lookForC"), plotOutput("lookForD"))),
+                     br(), br(),
                      
-                     hr(),
+                     fluidRow(align = "center",
+                              column(6, align = "center", plotOutput("lookForA")), 
+                              column(6, align = "center", plotOutput("lookForB"))
+                     ),
                      
-                     titlePanel("What do ___ think the opposite sex looks for..."),
-                     plotOutput("lookForE"),
-                     fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("lookForF"), plotOutput("lookForG"))),
+                     fluidRow(align = "center",
+                              column(6, align = "center", plotOutput("lookForC")), 
+                              column(6, align = "center", plotOutput("lookForD"))
+                     ),
+                     
+                     br(), br(), hr(), br(), br(),
+                     
+                     titlePanel(h1("What do males and females think their date looks for in them?", align = "center")),
+                     titlePanel(h3("After a few dates, with time, people usually realise that their dates are looking for a specific attribute. Here's a look at some patterns.", align = "center")),
+                     
+                     fluidRow(plotOutput("lookForE"), align = "center"),
+                     
+                     fluidRow(align = "center",
+                              column(6, align = "center", plotOutput("lookForF")), 
+                              column(6, align = "center", plotOutput("lookForG"))
+                     ),
+                     
+                     br(), br(), hr(), br(), br(),
+                     
+                     titlePanel(h1("For both failed and successful matches, what did people think about their date for the night?",align = "center")),
+                     plotOutput("datesImpressionsPlot"),
+                     
+                     br(), br(), br()
 )
 
 
 # ======================== JOEY ========================
 secondTab <- tabPanel("Tastes and Preferences - II (Paid)",
-                      titlePanel("Change in importance of attributes"),
-                      fluidRow(splitLayout(cellWidths = c("50%", "50%"),
-                                           div(
-                                             radioButtons("gender", label = "Gender", choices = c("Male" = "TRUE", "Female" = "FALSE")),
-                                             radioButtons("age", label = "Age", choices = c("18-25","26-35","36-55"))
-                                           ),
-                                           plotOutput("imptPlot"))
+                      titlePanel(h1("What attributes do we prioritise?", align = "center")),
+                      titlePanel(h3("People at different stages of life usually look for different things in a mate, don't they?", align = "center")),
+                      
+                      br(), br(),
+                      
+                      fluidRow(column(6, align = "center",
+                                      div(
+                                        radioButtons("gender", label = "Gender", choices = c("Male" = "TRUE", "Female" = "FALSE")),
+                                        radioButtons("age", label = "Age", choices = c("18-25","26-35","36-55")))
+                      ),
+                      column(6, align = "center", plotOutput("imptPlot"))
                       ),
                       
-                      hr(),
+                      br(), br(), hr(), br(), br(),
                       
-                      titlePanel("What others look for vs what I look for in the opposite sex"),
-                      fluidRow(splitLayout(cellWidths = c("50%", "50%"),
-                                           absolutePanel(
-                                             numericInput("attJoey", label = "Attractiveness", value = 0, min = 0, max = 100, step = 5),
-                                             numericInput("sinJoey", label = "Sincerity", value = 0, min = 0, max = 100, step = 5),
-                                             numericInput("intJoey", label = "Intelligence", value = 0, min = 0, max = 100, step = 5),
-                                             numericInput("funJoey", label = "Fun", value = 0, min = 0, max = 100, step = 5),
-                                             numericInput("ambJoey", label = "Ambition", value = 0, min = 0, max = 100, step = 5),
-                                             numericInput("shaJoey", label = "Shared interests", value = 0, min = 0, max = 100, step = 5),  
-                                           ),
-                                           plotOutput("vsPlotJoey"))
-                      )
+                      titlePanel(h1("What others look for vs what I look for in the opposite sex", align = "center")),
+                      fluidRow(
+                        column(6, align = "center",
+                               div(
+                                 numericInput("attJoey", label = "Attractiveness", value = 0, min = 0, max = 100, step = 5),
+                                 numericInput("sinJoey", label = "Sincerity", value = 0, min = 0, max = 100, step = 5),
+                                 numericInput("intJoey", label = "Intelligence", value = 0, min = 0, max = 100, step = 5),
+                                 numericInput("funJoey", label = "Fun", value = 0, min = 0, max = 100, step = 5),
+                                 numericInput("ambJoey", label = "Ambition", value = 0, min = 0, max = 100, step = 5),
+                                 numericInput("shaJoey", label = "Shared interests", value = 0, min = 0, max = 100, step = 5)
+                               )
+                        ),
+                        column(6, align = "center", plotOutput("vsPlotJoey"))
+                      ),
+                      
+                      br(), br(), br()
 )
 
 # ======================== JOEY ========================
 
-thirdTab <- tabPanel("Impressions on Dates (Paid)",
-                     titlePanel("On failed vs successful matches, what did people think about the other person's characteristics?"),
-                     plotOutput("datesImpressionsPlot")
+
+thirdTab <- tabPanel("Matching Interests",
+                     titlePanel(h1("How matching are our interests?", align = "center")),
+                     titlePanel(h3("For some people, a particular hobby or interest can either be the deal-breaker or seal the deal.", align = "center")),
+                     
+                     br(), br(),
+                     
+                     fluidRow(selectInput("my_attribute_dropdown",
+                                          label = h3("My attribute", align = "center"),
+                                          choices = options_of_characteristics,
+                                          selected = 1),
+                              align = "center"),
+                     
+                     br(), br(),
+                     
+                     fluidRow(selectInput("other_attribute_dropdown",
+                                          label = h3("The other person's attribute", align = "center"),
+                                          choices = options_of_characteristics,
+                                          selected = 1),
+                              align = "center"),
+                     
+                     br(), br(),
+                     
+                     fluidRow(radioButtons("gender_radio",
+                                           label = h3("My gender"),
+                                           choices = list("Male" = TRUE, "Female" = FALSE),
+                                           selected = TRUE),
+                              align = "center"),
+                     
+                     br(), br(),
+                     
+                     titlePanel(h3("What's the probability that the other party will be interested?", align = "center")),
+                     plotOutput("bothPeopleAttributesPlot"),
+                     
+                     br(), br(), br()
 )
 
-fourthTab <- tabPanel("How matching are our attributes?",
-                      fluidRow(splitLayout(cellWidths = c("33.33%", "33.33%", "33.33%"),
-                                           absolutePanel(selectInput("my_attribute_dropdown",
-                                                                     label = h3("My attribute"),
-                                                                     choices = options_of_characteristics,
-                                                                     selected = 1)),
-                                           absolutePanel(selectInput("other_attribute_dropdown",
-                                                                     label = h3("The other person's attribute"),
-                                                                     choices = options_of_characteristics,
-                                                                     selected = 1)),
-                                           radioButtons("gender_radio",
-                                                        label = h3("My gender"),
-                                                        choices = list("Male" = TRUE, "Female" = FALSE),
-                                                        selected = TRUE)
-                      )
-                      ),
-                      plotOutput("bothPeopleAttributesPlot")
-)
+height_heatmap <- 100
 
-fifthTab <-
-  tabPanel("How matching are our characteristics? (Paid)",
-           fluidRow(splitLayout(cellWidths = c("50%", "50%"),
-                                absolutePanel(
-                                  selectInput("my_field_study_dropdown", label = h3("My field of study"), 
-                                              choices = possible_person_field_of_study, selected = 1),
-                                  selectInput("partner_field_study_dropdown", label = h3("Partner's field of study"), 
-                                              choices = possible_partner_field_of_study, selected = 1)
-                                ),
-                                plotOutput("fieldOfStudyComp"))
-           ),
+fourthTab <-
+  tabPanel("Matching Characteristics (Paid)",
+           titlePanel(h1("How matching are our characteristics?", align = "center")),
+           titlePanel(h3("Do people usually find success in people that they share characteristics with? Or do opposites attract?", align = "center")),
            
-           hr(),
+           br(), br(), br(), 
            
-           fluidRow(splitLayout(cellWidths = c("50%", "50%"),
-                                plotOutput("raceComp"),
-                                absolutePanel(
-                                  selectInput("my_race_dropdown", label = h3("My race"),
-                                              choices = possible_person_race, selected = 1),
-                                  selectInput("partner_race_dropdown", label = h3("Partner's race"),
-                                              choices = possible_partner_race, selected = 1)
-                                ))
-           ),
+           plotOutput("fieldOfStudyComp", width = "100%", height = height_heatmap * nrow(unique(field_of_study_combos[1]))),
            
-           hr(),
+           br(), br(), hr(), br(), br(),
            
-           fluidRow(splitLayout(cellWidths = c("50%", "50%"),
-                                absolutePanel(
-                                  selectInput("my_participating_dropdown", label = h3("My reason for participating in dating events"),
-                                              choices = possible_person_participating_goal, selected = 1),
-                                  selectInput("partner_participating_dropdown", label = h3("Partner's reason for participating in dating events"),
-                                              choices = possible_partner_participating_goal, selected = 1),
-                                ),
-                                plotOutput("participatingReasonComp"))
-           ),
+           plotOutput("raceComp", width = "100%", height = height_heatmap * nrow(unique(race_combos[1]))),
            
-           hr(),
+           br(), br(), hr(), br(), br(),
            
-           fluidRow(splitLayout(cellWidths = c("50%", "50%"),
-                                plotOutput("goingOutFreqComp"),
-                                absolutePanel(
-                                  selectInput("my_go_out_dropdown", label = h3("My frequency of going out (not necessarily on dates)"),
-                                              choices = possible_person_go_out_freq, selected = 1),
-                                  selectInput("partner_go_out_dropdown", label = h3("Partner's frequency of going out (not necessarily on dates)"),
-                                              choices = possible_partner_go_out_freq, selected = 1),
-                                ))
-           ),
+           plotOutput("participatingReasonComp", width = "100%", height = height_heatmap * nrow(unique(goal_of_participating_combos[1]))),
            
-           hr(),
+           br(), br(), hr(), br(), br(),
            
-           fluidRow(splitLayout(cellWidths = c("50%", "50%"),
-                                absolutePanel(
-                                  selectInput("my_date_dropdown", label = h3("My frequency of going out on dates"),
-                                              choices = possible_person_date_freq, selected = 1),
-                                  selectInput("partner_date_dropdown", label = h3("Partner's frequency of going out on dates"),
-                                              choices = possible_partner_date_freq, selected = 1),
-                                ),
-                                plotOutput("dateFreqComp"))
-           )
+           plotOutput("goingOutFreqComp", width = "100%", height = height_heatmap * nrow(unique(freq_of_going_out_combos[1]))),
+           
+           br(), br(), hr(), br(), br(),
+           
+           plotOutput("dateFreqComp", width = "100%", height = height_heatmap * nrow(unique(freq_of_dates_combos[1]))),
+           
+           br(), br(), br()
   )
 
 
 
-ui <- fluidPage(
-  
-  titlePanel("Title"),
-  
-  mainPanel(
-    tabsetPanel(type = "tabs",
-                appOverviewTab,
-                firstTab,
-                secondTab,
-                thirdTab,
-                fourthTab,
-                fifthTab
-    ),
-    width = 12
-    
-  ),
-  
-  hr()  # some divider
-  
+conclusionTab <- tabPanel("Summary",
+                          h2(paste0("Likelihood of finding a good match: ", sample(50:90, 1), "%"), align = "center"),
+                          
+                          br(), br(), hr(), br(), br(),
+                          
+                          h4("Click here for a 1-on-1 chat with our dating consultants!", align = "center"),
+                          fluidRow(actionButton("", label = "Contact"), align = "center"),
+                          
+                          br(), br(), hr(), br(), br(),
+                          
+                          fluidRow(textInput("text", label = h3("Leave a feedback!", align = "center"), placeholder = "Suggestions..."), align = "center"),
+                          fluidRow(actionButton("", label = "Submit"), align = "center"),
+                          
+                          br(), br(), br()
+                          
 )
 
+ui <- navbarPage(
+  "DatingAnalytics",
+  tags$style(type="text/css", "body {padding-top: 150px;}"),
+  appOverviewTab,
+  firstTab,
+  secondTab,
+  thirdTab,
+  fourthTab,
+  conclusionTab,
+  inverse = TRUE,
+  position = "fixed-top"
+)
+
+
+
+
+
+
+# Server
 
 server <- function(input, output) {
   
   # Overview Tab
   
-  output$gender_plot <- renderPlot({get_basic_stats_pie_chart(gender_stats)})
-  output$age_plot <- renderPlot({get_basic_stats_pie_chart(age_stats)})
+  output$gender_plot <- renderPlot({
+    get_basic_stats_pie_chart(gender_stats)
+  })
+  
+  output$age_plot <- renderPlot({
+    (participants_data %>% filter(!is.na(age)) %>% select(age) 
+     %>% ggplot(aes(x = age)) + geom_density(color = "Red") + labs(x = "Age", y = "Density", title = "Age Distribution") 
+     + theme(panel.background = element_rect(fill = "#FFFFFF")))
+  })  # density plot
+  
   output$field_of_study_plot <- renderPlot({get_basic_stats_pie_chart(field_of_study_stats)})
   output$race_plot <- renderPlot({get_basic_stats_pie_chart(race_stats)})
   output$goal_of_participating_plot <- renderPlot({get_basic_stats_pie_chart(goal_of_participating_stats)})
@@ -863,14 +954,18 @@ server <- function(input, output) {
   
   # Tab 1
   
-  output$lookForA <- renderPlot({spider_chart_look(look_for_in_opp_sex_before_event_summary, "...normally?")})
-  output$lookForB <- renderPlot({spider_chart_look(look_for_in_opp_sex_halfway_thru_event_summary, "...right after meeting a few dates?")})
-  output$lookForC <- renderPlot({spider_chart_look(look_for_in_opp_sex_day_after_event_summary, "...a day after meeting some dates?")})
-  output$lookForD <- renderPlot({spider_chart_look(look_for_in_opp_sex_weeks_after_event_summary, "...a few weeks after meeting some dates?")})
+  output$lookForA <- renderPlot({spider_chart_look(look_for_in_opp_sex_before_event_summary, "Normally")})
+  output$lookForB <- renderPlot({spider_chart_look(look_for_in_opp_sex_halfway_thru_event_summary, "Right after a dates")})
+  output$lookForC <- renderPlot({spider_chart_look(look_for_in_opp_sex_day_after_event_summary, "A day after a date")})
+  output$lookForD <- renderPlot({spider_chart_look(look_for_in_opp_sex_weeks_after_event_summary, "A few weeks after a date")})
   
-  output$lookForE <- renderPlot({spider_chart_look(opp_sex_look_for_in_date_before_event_summary, "...normally?")})
-  output$lookForF <- renderPlot({spider_chart_look(opp_sex_looks_for_in_date_day_after_event_summary, "...a day after meeting some dates?")})
-  output$lookForG <- renderPlot({spider_chart_look(opp_sex_looks_for_in_date_weeks_after_event_summary, "...a few weeks after meeting some dates?")})
+  output$lookForE <- renderPlot({spider_chart_look(opp_sex_look_for_in_date_before_event_summary, "Normally")})
+  output$lookForF <- renderPlot({spider_chart_look(opp_sex_looks_for_in_date_day_after_event_summary, "A day after a date")})
+  output$lookForG <- renderPlot({spider_chart_look(opp_sex_looks_for_in_date_weeks_after_event_summary, "A few weeks after a date")})
+  
+  output$datesImpressionsPlot <- renderPlot({failed_vs_success_matches()})
+  
+  # Tab 2 (JOEY)
   
   output$imptPlot <- renderPlot({
     
@@ -891,11 +986,12 @@ server <- function(input, output) {
     stage <- c(rep("At signup", 6), rep("Day after", 6), rep("Weeks after", 6))
     tb <- data.frame(stage, criteria, value) %>% within(stage <- factor(stage, levels = c("At signup", "Day after", "Weeks after")))
     
-    ggplot(tb, aes(fill = criteria, y = value, x = stage)) + geom_bar(position = "stack", stat = "identity", color = "black") + scale_fill_brewer()
+    result <- (ggplot(tb, aes(fill = criteria, y = value, x = stage)) 
+               + geom_bar(position = "stack", stat = "identity", color = "black") 
+               + scale_color_gradient(low = "#FFDAF4", high = "#FE58CD"))
+    
+    result
   })
-  
-  
-  # Tab 2 (JOEY)
   
   output$vsPlotJoey <- renderPlot(
     { 
@@ -911,14 +1007,10 @@ server <- function(input, output) {
       )
       
       tb <- data.frame(criteria, value)
-      ggplot(tb, aes(y = value,x = criteria)) + geom_bar(stat = "identity") + scale_fill_brewer()
+      ggplot(tb, aes(x = criteria, y = value, fill = value)) + geom_bar(stat = "identity", color = "black") + scale_fill_gradient(low = "#FFDAF4", high = "#FE58CD")
     }) 
   
   # Tab 3
-  
-  output$datesImpressionsPlot <- renderPlot({failed_vs_success_matches()})
-  
-  # Tab 4
   
   getCharsChart <- reactive({
     return (get_attributes_comparison(input$my_attribute_dropdown, input$other_attribute_dropdown, input$gender_radio))
@@ -926,7 +1018,8 @@ server <- function(input, output) {
   
   output$bothPeopleAttributesPlot <- renderPlot(getCharsChart())
   
-  # Tab 5
+  
+  # Tab 4
   
   output$fieldOfStudyComp <- renderPlot(
     get_chars_pie_chart(field_of_study_combos, input$my_field_study_dropdown, input$partner_field_study_dropdown)
@@ -948,8 +1041,21 @@ server <- function(input, output) {
     get_chars_pie_chart(freq_of_dates_combos, input$my_date_dropdown, input$partner_date_dropdown)
   )
   
+  
+  
+  output$fieldOfStudyComp <- renderPlot(match_prob_to_heatmap(field_of_study_combos, "Field of Study"))
+  
+  output$raceComp <- renderPlot(match_prob_to_heatmap(race_combos, "Race"))
+  
+  output$participatingReasonComp <- renderPlot(match_prob_to_heatmap(goal_of_participating_combos, "Goal of going on dates"))
+  
+  output$goingOutFreqComp <- renderPlot(match_prob_to_heatmap(freq_of_going_out_combos, "Frequency of going out"))
+  
+  output$dateFreqComp <- renderPlot(match_prob_to_heatmap(freq_of_dates_combos, "Frequency of going on dates"))
 }
 
+
 shinyApp(ui = ui, server = server)
+
 
 
