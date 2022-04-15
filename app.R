@@ -9,6 +9,7 @@ library(shiny)
 library(ggmap)
 
 
+
 safe_divide <- function(a, b) {
   return (ifelse(b == 0, 0, a/b))
 }
@@ -34,6 +35,7 @@ pref_to_category <- function(num) {
   }
 }
 pref_to_category_vec <- Vectorize(pref_to_category)
+
 
 
 
@@ -124,7 +126,6 @@ matches_general <- read.csv(paste0("matches_general", ".csv"))
 
 
 
-
 # function that removes rows where all columns are NA
 remove_six_attrs_all_na <- function(df) {
   return (df %>% filter(!(is.na(attractiveness) & is.na(sincerity) & is.na(intelligence) & is.na(fun) & is.na(ambition) & is.na(shared_interests))))
@@ -186,6 +187,9 @@ get_plot_from_six_attrs_summary <- function(df, title) {
 
 
 # 1) Chart to show proportion of people interested based on interest level in some activity
+
+
+
 
 
 # options
@@ -257,9 +261,9 @@ get_attributes_comparison <- function(attr, other_attr, is_male) {
   
   # facet_var = as.formula(paste0("~", aggr_attr_col_name))
   
-  graph_title <- paste0("Your level of interest in ", attr)
-  x_axis_label <- paste0("Their level of interest in ", other_attr)
-  y_axis_label <- "Probability of a match"
+  graph_title <- paste0("My level of interest in ", attr)
+  x_axis_label <- paste0("Date's level of interest in ", other_attr)
+  y_axis_label <- "Probability of match"
   
   attributes_comparison_graph <- (attributes_comparison 
                                   %>% mutate(grouping = factor(!!as.symbol(aggr_attr_col_name), levels = ordering))  # create a new column to order Low Mid High
@@ -272,6 +276,7 @@ get_attributes_comparison <- function(attr, other_attr, is_male) {
                                   + labs(x = x_axis_label, y = y_axis_label)
                                   + theme(plot.title = element_text(hjust = 0.5)) 
                                   + scale_fill_gradient(low = "#FFDAF4", high = "#FE58CD")
+                                  + guides(fill=guide_legend(title="Success Rate"))
                                   
   )
   
@@ -283,6 +288,8 @@ get_attributes_comparison <- function(attr, other_attr, is_male) {
 
 
 # 2) Spider chart to show what people look for / what people think others look for
+
+
 
 
 # =================== WHAT DO PEOPLE LOOK FOR IN THE OPPOSITE SEX? AND WHAT DO THEY THINK THE OPPOSITE SEX LOOKS FOR? ===================
@@ -383,10 +390,10 @@ spider_chart_look(opp_sex_look_for_in_date_before_event_summary, "What ___ think
 
 
 
-
-
-
 # 3) What kind of matches will they get based on their own rating?
+
+
+
 
 
 match.probability <- function(is_female, as, sy, ie, fn, an, ss) {
@@ -427,10 +434,9 @@ match.probability(is_female = FALSE, 10, 20, 15, 20, 15, 20)
 
 
 
-
-
-
 # 4) Probability of match based on some person's characteristic
+
+
 
 
 person_data <- participants_data
@@ -539,6 +545,8 @@ get_chars_pie_chart <- function(df, person_char, partner_char) {
 # 5) For successful dates vs non-successful dates, what did people think about the other person's characteristics?
 
 
+
+
 failed_vs_success_matches <- function() {
   
   results <- (dates_results 
@@ -568,7 +576,10 @@ failed_vs_success_matches <- function() {
 
 
 
+
+
 # SHINY
+
 
 # some variables to use
 options_of_characteristics = c(
@@ -635,8 +646,8 @@ match_prob_to_heatmap <- function(df, title) {
   
   return (ggplot(df, aes(!!as.symbol(colnames(df)[1]), !!as.symbol(colnames(df)[2]))) 
           + geom_tile(aes(fill = Probability_of_Match), color = "black")
-          + xlab("You")
-          + ylab("Your partner")
+          + xlab("Me")
+          + ylab("My date")
           + scale_fill_gradient(name = "Probability of matching", low = "#FFDAF4", high = "#FE58CD")
           + labs(title = title)
           + theme(text = element_text(size = 20))
@@ -648,8 +659,8 @@ match_prob_to_heatmap <- function(df, title) {
 
 
 
-
 # APP OVERVIEW
+
 
 num_users <- nrow(participants_data)
 
@@ -694,11 +705,11 @@ intended_career_stats <- (participants_data %>% filter(!is.na(intended_career_ca
 get_basic_stats_pie_chart <- function(df) {
   
   first_col <- names(df)[1]
-  n <- sum(intended_career_stats$`Number of Users`)
+  n <- sum(df$`Number of Users`)
   
   df <- df %>% mutate(labels_for_legend = paste0(!!as.symbol(first_col), " (", percent(!!as.symbol("Number of Users") / n), ")")) %>% arrange(-`Number of Users`)
   
-  pctgs <- paste0(round(intended_career_stats$`Number of Users` * 100 / n, 1), "%")
+  pctgs <- paste0(round(df$`Number of Users` * 100 / n, 1), "%")
   
   pie <- (ggplot(df, aes(x = "", y = `Number of Users`, fill = reorder(labels_for_legend, -`Number of Users`))) 
           + geom_bar(width = 1, stat = "identity", color = "black") 
@@ -711,10 +722,9 @@ get_basic_stats_pie_chart <- function(df) {
 }
 
 
-
-
-
 # UI
+
+
 
 appOverviewTab <- tabPanel("Users Overview (Free)",
                            titlePanel(h1(paste0("Number of users: ", num_users), align = "center")),
@@ -790,15 +800,15 @@ firstTab <- tabPanel("Tastes and Preferences (Free)",
 
 # ======================== JOEY ========================
 secondTab <- tabPanel("Tastes and Preferences - II (Paid)",
-                      titlePanel(h1("What attributes do we prioritise?", align = "center")),
-                      titlePanel(h3("People at different stages of life usually look for different things in a mate, don't they?", align = "center")),
+                      titlePanel(h1("What attributes are more important?", align = "center")),
+                      titlePanel(h3("Does the ranking in the importance of attributes change before and after a date?", align = "center")),
                       
                       br(), br(),
                       
                       fluidRow(column(6, align = "center",
                                       div(
-                                        radioButtons("gender", label = "Gender", choices = c("Male" = "TRUE", "Female" = "FALSE")),
-                                        radioButtons("age", label = "Age", choices = c("18-25","26-35","36-55")))
+                                        radioButtons("gender", label = "My date's gender:", choices = c("Male" = "TRUE", "Female" = "FALSE")),
+                                        radioButtons("age", label = "My date's age:", choices = c("18-25","26-35","36-55")))
                       ),
                       column(6, align = "center", plotOutput("imptPlot"))
                       ),
@@ -809,6 +819,10 @@ secondTab <- tabPanel("Tastes and Preferences - II (Paid)",
                       fluidRow(
                         column(6, align = "center",
                                div(
+                                 
+                                 radioButtons("mygender", label = "My gender:", choices = c("Male" = "TRUE", "Female" = "FALSE")),
+                                 radioButtons("myage", label = "My age:", choices = c("18-25","26-35","36-55")),                                          
+                                 strong("My distribution of 100 points among the attributes' importance in opposite sex:"),
                                  numericInput("attJoey", label = "Attractiveness", value = 0, min = 0, max = 100, step = 5),
                                  numericInput("sinJoey", label = "Sincerity", value = 0, min = 0, max = 100, step = 5),
                                  numericInput("intJoey", label = "Intelligence", value = 0, min = 0, max = 100, step = 5),
@@ -826,14 +840,14 @@ secondTab <- tabPanel("Tastes and Preferences - II (Paid)",
 # ======================== JOEY ========================
 
 
-thirdTab <- tabPanel("Matching Interests",
+thirdTab <- tabPanel("Matching Interests (Paid)",
                      titlePanel(h1("How matching are our interests?", align = "center")),
                      titlePanel(h3("For some people, a particular hobby or interest can either be the deal-breaker or seal the deal.", align = "center")),
                      
                      br(), br(),
                      
                      fluidRow(selectInput("my_attribute_dropdown",
-                                          label = h3("My attribute", align = "center"),
+                                          label = h3("My interest:", align = "center"),
                                           choices = options_of_characteristics,
                                           selected = 1),
                               align = "center"),
@@ -841,7 +855,7 @@ thirdTab <- tabPanel("Matching Interests",
                      br(), br(),
                      
                      fluidRow(selectInput("other_attribute_dropdown",
-                                          label = h3("The other person's attribute", align = "center"),
+                                          label = h3("My date's interest:", align = "center"),
                                           choices = options_of_characteristics,
                                           selected = 1),
                               align = "center"),
@@ -849,7 +863,7 @@ thirdTab <- tabPanel("Matching Interests",
                      br(), br(),
                      
                      fluidRow(radioButtons("gender_radio",
-                                           label = h3("My gender"),
+                                           label = h3("My gender:"),
                                            choices = list("Male" = TRUE, "Female" = FALSE),
                                            selected = TRUE),
                               align = "center"),
@@ -894,7 +908,7 @@ fourthTab <-
 
 
 
-conclusionTab <- tabPanel("Summary",
+conclusionTab <- tabPanel("Contact Us",
                           h2(paste0("Likelihood of finding a good match: ", sample(50:90, 1), "%"), align = "center"),
                           
                           br(), br(), hr(), br(), br(),
@@ -927,9 +941,10 @@ ui <- navbarPage(
 
 
 
-
-
 # Server
+
+
+
 
 server <- function(input, output) {
   
@@ -941,7 +956,9 @@ server <- function(input, output) {
   
   output$age_plot <- renderPlot({
     (participants_data %>% filter(!is.na(age)) %>% select(age) 
-     %>% ggplot(aes(x = age)) + geom_density(color = "Red") + labs(x = "Age", y = "Density", title = "Age Distribution") 
+     %>% ggplot(aes(x = age)) 
+     + geom_density(color = "Red") 
+     + labs(x = "Age", y = "Density", title = paste0("Age Distribution, n = ", nrow(participants_data %>% filter(!is.na(age)))))
      + theme(panel.background = element_rect(fill = "#FFFFFF")))
   })  # density plot
   
@@ -955,13 +972,13 @@ server <- function(input, output) {
   # Tab 1
   
   output$lookForA <- renderPlot({spider_chart_look(look_for_in_opp_sex_before_event_summary, "Normally")})
-  output$lookForB <- renderPlot({spider_chart_look(look_for_in_opp_sex_halfway_thru_event_summary, "Right after a dates")})
-  output$lookForC <- renderPlot({spider_chart_look(look_for_in_opp_sex_day_after_event_summary, "A day after a date")})
-  output$lookForD <- renderPlot({spider_chart_look(look_for_in_opp_sex_weeks_after_event_summary, "A few weeks after a date")})
+  output$lookForB <- renderPlot({spider_chart_look(look_for_in_opp_sex_halfway_thru_event_summary, "Right after date")})
+  output$lookForC <- renderPlot({spider_chart_look(look_for_in_opp_sex_day_after_event_summary, "Day after date")})
+  output$lookForD <- renderPlot({spider_chart_look(look_for_in_opp_sex_weeks_after_event_summary, "Few weeks after date")})
   
   output$lookForE <- renderPlot({spider_chart_look(opp_sex_look_for_in_date_before_event_summary, "Normally")})
-  output$lookForF <- renderPlot({spider_chart_look(opp_sex_looks_for_in_date_day_after_event_summary, "A day after a date")})
-  output$lookForG <- renderPlot({spider_chart_look(opp_sex_looks_for_in_date_weeks_after_event_summary, "A few weeks after a date")})
+  output$lookForF <- renderPlot({spider_chart_look(opp_sex_looks_for_in_date_day_after_event_summary, "Day after date")})
+  output$lookForG <- renderPlot({spider_chart_look(opp_sex_looks_for_in_date_weeks_after_event_summary, "Few weeks after date")})
   
   output$datesImpressionsPlot <- renderPlot({failed_vs_success_matches()})
   
@@ -988,26 +1005,28 @@ server <- function(input, output) {
     
     result <- (ggplot(tb, aes(fill = criteria, y = value, x = stage)) 
                + geom_bar(position = "stack", stat = "identity", color = "black") 
-               + scale_color_gradient(low = "#FFDAF4", high = "#FE58CD"))
+               + scale_color_gradient(low = "#FFDAF4", high = "#FE58CD")
+               + labs(x = "", y = "Importance (%)")
+               + guides(fill=guide_legend(title="Attributes")))
     
     result
   })
   
   output$vsPlotJoey <- renderPlot(
     { 
-      criteria <- c("att","sin","int","fun","amb","sha")
+      criteria <- c("Attractiveness","Sincerity","Intelligence","Fun","Ambition","Shared interests")
       
       value <- c(
-        input$attJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$gender & age == input$age) %>% select(attractiveness) %>% sapply(mean),
-        input$sinJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$gender & age == input$age) %>% select(sincerity) %>% sapply(mean),
-        input$intJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$gender & age == input$age) %>% select(intelligence) %>% sapply(mean),
-        input$funJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$gender & age == input$age) %>% select(fun) %>% sapply(mean),
-        input$ambJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$gender & age == input$age) %>% select(ambition) %>% sapply(mean),
-        input$shaJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$gender & age == input$age) %>% select(shared_interests) %>% sapply(mean)
+        input$attJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$mygender & age == input$myage) %>% select(attractiveness) %>% sapply(mean),
+        input$sinJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$mygender & age == input$myage) %>% select(sincerity) %>% sapply(mean),
+        input$intJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$mygender & age == input$myage) %>% select(intelligence) %>% sapply(mean),
+        input$funJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$mygender & age == input$myage) %>% select(fun) %>% sapply(mean),
+        input$ambJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$mygender & age == input$myage) %>% select(ambition) %>% sapply(mean),
+        input$shaJoey - look_for_in_opp_sex_at_signup_w_age %>% filter(is_male == input$mygender & age == input$myage) %>% select(shared_interests) %>% sapply(mean)
       )
       
-      tb <- data.frame(criteria, value)
-      ggplot(tb, aes(x = criteria, y = value, fill = value)) + geom_bar(stat = "identity", color = "black") + scale_fill_gradient(low = "#FFDAF4", high = "#FE58CD")
+      tb <- data.frame(criteria, value) %>% within(criteria <- factor(criteria, levels = c("Attractiveness", "Sincerity", "Intelligence","Fun","Ambition","Shared interests")))
+      ggplot(tb, aes(x = criteria, y = value, fill = value)) + geom_bar(stat = "identity", color = "black") + scale_fill_gradient(low = "#FFDAF4", high = "#FE58CD") + labs(x = "", y = "Difference from others") + guides(fill=guide_legend(title="Difference"))
     }) 
   
   # Tab 3
@@ -1054,8 +1073,8 @@ server <- function(input, output) {
   output$dateFreqComp <- renderPlot(match_prob_to_heatmap(freq_of_dates_combos, "Frequency of going on dates"))
 }
 
-
 shinyApp(ui = ui, server = server)
+
 
 
 
