@@ -40,7 +40,6 @@ pref_to_category_vec <- Vectorize(pref_to_category)
 
 
 
-
 setwd("data_files")
 
 # ============== info on each participant ==============
@@ -126,6 +125,7 @@ matches_general <- read.csv(paste0("matches_general", ".csv"))
 
 
 
+
 # function that removes rows where all columns are NA
 remove_six_attrs_all_na <- function(df) {
   return (df %>% filter(!(is.na(attractiveness) & is.na(sincerity) & is.na(intelligence) & is.na(fun) & is.na(ambition) & is.na(shared_interests))))
@@ -187,8 +187,6 @@ get_plot_from_six_attrs_summary <- function(df, title) {
 
 
 # 1) Chart to show proportion of people interested based on interest level in some activity
-
-
 
 
 
@@ -265,30 +263,33 @@ get_attributes_comparison <- function(attr, other_attr, is_male) {
   x_axis_label <- paste0("Date's level of interest in ", other_attr)
   y_axis_label <- "Probability of match"
   
-  attributes_comparison_graph <- (attributes_comparison 
-                                  %>% mutate(grouping = factor(!!as.symbol(aggr_attr_col_name), levels = ordering))  # create a new column to order Low Mid High
-                                  %>% ggplot(aes(x = reorder(!!as.symbol(aggr_other_attr_col_name), success_rate), # reorder within each facet
+  attributes_comparison_graph <- (attributes_comparison
+                                  # create new columns to order Low Mid High
+                                  %>% mutate(outer_grouping = factor(!!as.symbol(aggr_attr_col_name), levels = ordering),
+                                             inner_grouping = factor(!!as.symbol(aggr_other_attr_col_name), levels = ordering))
+                                  %>% ggplot(aes(x = inner_grouping, # reorder within each facet
                                                  y = success_rate,
-                                                 fill = success_rate)) 
+                                                 fill = success_rate))
                                   + geom_bar(stat = "identity", color = "black")
-                                  + facet_wrap(.~grouping)  # order the facets based on Low, Mid, High
+                                  + facet_wrap(.~outer_grouping)  # order the facets based on Low, Mid, High
                                   + ggtitle(graph_title)
                                   + labs(x = x_axis_label, y = y_axis_label)
                                   + theme(plot.title = element_text(hjust = 0.5)) 
                                   + scale_fill_gradient(low = "#FFDAF4", high = "#FE58CD")
                                   + guides(fill=guide_legend(title="Success Rate"))
-                                  
-  )
+  )  
   
   return (attributes_comparison_graph)
 }
+
+
+get_attributes_comparison("art", "art", TRUE)
 
 
 
 
 
 # 2) Spider chart to show what people look for / what people think others look for
-
 
 
 
@@ -353,7 +354,6 @@ other_sex_weeks_after_event_look_for <- get_plot_from_six_attrs_summary(opp_sex_
 
 
 
-
 spider_chart_look <- function(df, title) {
   
   df <- df %>% spread(Attribute, Score) %>% remove_rownames %>% column_to_rownames(var="gender")
@@ -362,7 +362,7 @@ spider_chart_look <- function(df, title) {
   
   rownames(df) <- c("Females", "Males")
   
-  df <- rbind(rep(30,6), rep(0,6), df)
+  df <- rbind(rep(42,6), rep(0,6), df)
   
   colors_border <- c( rgb(0.8,0.2,0.5,0.9), rgb(0.2,0.5,0.5,0.9) )
   colors_in <- c( rgb(0.8,0.2,0.5,0.4), rgb(0.2,0.5,0.5,0.4) )
@@ -386,12 +386,12 @@ spider_chart_look <- function(df, title) {
   
 }
 
-spider_chart_look(opp_sex_look_for_in_date_before_event_summary, "What ___ think the opposite sex looks for in a date")
+spider_chart_look(opp_sex_looks_for_in_date_day_after_event_summary, "Day after date")
+
 
 
 
 # 3) What kind of matches will they get based on their own rating?
-
 
 
 
@@ -433,9 +433,7 @@ match.probability <- function(is_female, as, sy, ie, fn, an, ss) {
 match.probability(is_female = FALSE, 10, 20, 15, 20, 15, 20)
 
 
-
 # 4) Probability of match based on some person's characteristic
-
 
 
 
@@ -541,9 +539,7 @@ get_chars_pie_chart <- function(df, person_char, partner_char) {
 
 
 
-
 # 5) For successful dates vs non-successful dates, what did people think about the other person's characteristics?
-
 
 
 
@@ -567,11 +563,15 @@ failed_vs_success_matches <- function() {
                             "Overall Liking" = mean(liking_towards_partner))
               %>% mutate(match = ifelse(match, "Successful Matches", "Failed Matches")) 
               %>% gather(Attribute, Score, -match)
+              %>% within(Attribute <- factor(Attribute, levels = c("Ambition", "Attractiveness", "Fun", "Intelligence", "Shared Interests", "Sincerity", "Overall Liking")))
   )
   
   return (results %>% ggplot(aes(x = Attribute, y = Score, fill = Score)) + geom_bar(stat = "identity", color = "black") + scale_fill_gradient(low = "#FFDAF4", high = "#FE58CD") + facet_wrap(~match))
   
 }
+
+failed_vs_success_matches()
+
 
 
 
@@ -579,6 +579,8 @@ failed_vs_success_matches <- function() {
 
 
 # SHINY
+
+
 
 
 # some variables to use
@@ -638,11 +640,7 @@ look_for_in_opp_sex_weeks_after_event_w_age <- add_age(look_for_in_opp_sex_weeks
 
 # fourth tab
 
-match_prob_to_heatmap <- function(df, title) {
-  
-  for (i in 1:nrow(df)) {
-    df[i, 1] <- str_wrap(df[i, 1], width = 10)
-  }
+match_prob_to_heatmap <- function(df, title, ordering) {
   
   return (ggplot(df, aes(!!as.symbol(colnames(df)[1]), !!as.symbol(colnames(df)[2]))) 
           + geom_tile(aes(fill = Probability_of_Match), color = "black")
@@ -651,15 +649,19 @@ match_prob_to_heatmap <- function(df, title) {
           + scale_fill_gradient(name = "Probability of matching", low = "#FFDAF4", high = "#FE58CD")
           + labs(title = title)
           + theme(text = element_text(size = 20))
+          + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
   )
   
 }
 
-
+ordering <- c("To get a date", "To meet new people", "Seemed like a fun night out", "Looking for a serious relationship", "To say I did it", "Other")
+match_prob_to_heatmap(goal_of_participating_combos, "Goal of going on dates", ordering)
 
 
 
 # APP OVERVIEW
+
+
 
 
 num_users <- nrow(participants_data)
@@ -720,6 +722,10 @@ get_basic_stats_pie_chart <- function(df) {
   
   return (pie)
 }
+
+
+
+
 
 
 # UI
@@ -876,7 +882,7 @@ thirdTab <- tabPanel("Matching Interests (Paid)",
                      br(), br(), br()
 )
 
-height_heatmap <- 100
+x1 <- 100 * nrow(unique(field_of_study_combos[1]))
 
 fourthTab <-
   tabPanel("Matching Characteristics (Paid)",
@@ -885,31 +891,53 @@ fourthTab <-
            
            br(), br(), br(), 
            
-           plotOutput("fieldOfStudyComp", width = "100%", height = height_heatmap * nrow(unique(field_of_study_combos[1]))),
+           fluidRow(plotOutput("fieldOfStudyComp", width = "80%", height = x1), align = "center"),
            
            br(), br(), hr(), br(), br(),
            
-           plotOutput("raceComp", width = "100%", height = height_heatmap * nrow(unique(race_combos[1]))),
+           fluidRow(plotOutput("raceComp", width = "60%", height = 500), align = "center"),
            
            br(), br(), hr(), br(), br(),
            
-           plotOutput("participatingReasonComp", width = "100%", height = height_heatmap * nrow(unique(goal_of_participating_combos[1]))),
+           fluidRow(plotOutput("participatingReasonComp", width = "60%", height = 600), align = "center"),
            
            br(), br(), hr(), br(), br(),
            
-           plotOutput("goingOutFreqComp", width = "100%", height = height_heatmap * nrow(unique(freq_of_going_out_combos[1]))),
+           fluidRow(plotOutput("goingOutFreqComp", width = "60%", height = 700), align = "center"),
            
            br(), br(), hr(), br(), br(),
            
-           plotOutput("dateFreqComp", width = "100%", height = height_heatmap * nrow(unique(freq_of_dates_combos[1]))),
+           fluidRow(plotOutput("dateFreqComp", width = "60%", height = 700), align = "center"),
            
            br(), br(), br()
   )
 
 
 
+message <- ("It appears that if you are interested in art and your partner in movies, the probability that they will be interested in you would be rather low with a likelihood of approximately 60%. In general, partners seem to not appreciate the interest of 'movies' that significantly. If you have another hobby, you can consider prioritizing that instead to get a more ideal partner. 
+
+If you study Business, you have the best chance with someone in Medical Science with a probability of around 50%. If that is not what you are looking for, you have three other options: Fine Arts, Languages, and Business. Perhaps you can consider not highlighting this information if the partner's field of study is not to your preference. Otherwise, you can look forward to matching with someone in a similar discipline as you.")
+
+
+
 conclusionTab <- tabPanel("Contact Us",
                           h2(paste0("Likelihood of finding a good match: ", sample(50:90, 1), "%"), align = "center"),
+                          
+                          br(), br(), hr(), br(), br(),
+                          
+                          tags$div(tags$b(tags$u(tags$h3("Advice Report"))), align = "center"), br(),
+                          
+                          tags$div(tags$b("Gender: Male"), align = "center"), br(),
+                          
+                          tags$div(tags$b("Field of study: Business"), align = "center"), br(),
+                          
+                          tags$div(tags$b("Main interest: Art"), align = "center"), br(),
+                          
+                          tags$div(tags$b("Ideal partner's main Interest: Movies"), align = "center"), br(),
+                          
+                          tags$div(tags$b(tags$u(tags$h3("Tips and Advice"))), align = "center"), br(),
+                          
+                          tags$div(message, align = "center"), br(),
                           
                           br(), br(), hr(), br(), br(),
                           
@@ -940,11 +968,7 @@ ui <- navbarPage(
 
 
 
-
 # Server
-
-
-
 
 server <- function(input, output) {
   
@@ -1062,19 +1086,22 @@ server <- function(input, output) {
   
   
   
-  output$fieldOfStudyComp <- renderPlot(match_prob_to_heatmap(field_of_study_combos, "Field of Study"))
+  output$fieldOfStudyComp <- renderPlot(match_prob_to_heatmap(field_of_study_combos, "Field of Study", c()))
   
-  output$raceComp <- renderPlot(match_prob_to_heatmap(race_combos, "Race"))
+  output$raceComp <- renderPlot(match_prob_to_heatmap(race_combos, "Race", c()))
   
-  output$participatingReasonComp <- renderPlot(match_prob_to_heatmap(goal_of_participating_combos, "Goal of going on dates"))
+  ordering <- c("To get a date", "To meet new people", "Seemed like a fun night out", "Looking for a serious relationship", "To say I did it", "Other")
   
-  output$goingOutFreqComp <- renderPlot(match_prob_to_heatmap(freq_of_going_out_combos, "Frequency of going out"))
+  output$participatingReasonComp <- renderPlot(match_prob_to_heatmap(goal_of_participating_combos, "Goal of going on dates", ordering))
   
-  output$dateFreqComp <- renderPlot(match_prob_to_heatmap(freq_of_dates_combos, "Frequency of going on dates"))
+  ordering <- c("Several times a week", "Twice a week", "Once a week", "Twice a month", "Once a month", "Several times a year", "Almost never")
+  
+  output$goingOutFreqComp <- renderPlot(match_prob_to_heatmap(freq_of_going_out_combos, "Frequency of going out", ordering))
+  
+  output$dateFreqComp <- renderPlot(match_prob_to_heatmap(freq_of_dates_combos, "Frequency of going on dates", ordering))
 }
 
 shinyApp(ui = ui, server = server)
-
 
 
 
