@@ -1,0 +1,7 @@
+- The original dataset was obtained from https://www.kaggle.com/datasets/annavictoria/speed-dating-experiment
+
+- The original files provided were "Speed Dating Data.csv" and "Speed Dating Data Key.doc"
+
+- "Data_Cleaning.Rmd" contains codes to separate the original large dataset into individual, smaller files, however these files have been included and thus there is no need to run this file.
+
+- "Project_SA1_Team8_App.R" contains the Shiny app created in R. To run the app, this file must be in the same directory as the "data_files" folder.
